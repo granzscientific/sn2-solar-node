@@ -14,7 +14,7 @@ substitutions:
   sleep_duration: 15min
 
 packages:
-  granzscientific.sn1-ota: github://granzscientific/esphome-tools/config/ota-sleep-control.yaml
+  granzscientific.sn1-ota: github://granzscientific/esphome-tools/config/sleep-control.yaml
 
 esphome:
   project:
