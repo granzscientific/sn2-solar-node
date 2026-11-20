@@ -1,0 +1,256 @@
+substitutions:
+  name: gs-sn2
+  friendly_name: "GS SN2 Solar Node"
+
+  # See https://esphome.io/components/esphome.html#esphome-creators-project
+  project_name: GranzScientific.SN2-Solar-Node
+  project_ver_num: "1.0"
+  project_ver_let: a
+
+  # ota-sleep-control.yaml module overrides
+  wait_for_initial_setup_duration: 5min
+  wait_for_wifi_duration: 10s
+  wait_for_api_connection_duration: 30s
+  sleep_duration: 15min
+
+packages:
+  granzscientific.sn1-ota: github://granzscientific/esphome-tools/config/ota-sleep-control.yaml
+
+esphome:
+  project:
+    name: ${project_name}
+    version: ${project_ver_num}(${project_ver_let})
+  name: ${name}
+  friendly_name: ${friendly_name}
+  on_boot:
+    then:
+      - script.execute: scr_sleep_control
+      - script.wait: scr_sleep_control
+
+esp32:
+  board: esp32-c6-devkitc-1
+  variant: esp32c6
+  flash_size: 4MB
+  framework:
+    type: esp-idf
+
+# https://esphome.io/components/esphome.html#adjusting-flash-writes
+preferences:
+  flash_write_interval: 5min
+
+# Enable logging
+logger:
+  level: DEBUG
+  logs:
+    # Prevent spamming from ntc_power switch
+    switch: INFO
+  #hardware_uart: UART1
+  #baud_rate: 115200
+
+# Enable Home Assistant API
+api:
+  id: gs_api
+  # **** No API encryption key by default.  You should add one in your config!
+
+# https://esphome.io/components/ota.html
+ota:
+  - platform: esphome
+    # **** No OTA password by default.  You should add one in your config!
+    on_error:
+      - button.press: restart_button
+
+wifi:
+  id: wifi_wificomponent_id # For some reason, if any other id name is used this won't compile
+  # Using max output power on some ESP32C3 chips for the AP seems to cause unexpected reboots (sometimes)
+  output_power: 16dB
+  # Enable fallback access point (captive portal) in case wifi credentials missing
+  ap:
+    ssid: ${friendly_name}
+    password: "12345678"
+    # Disable AP when we have wifi credentials stored in nvmem
+    # Note that, after a factory reset we still have an AP no matter what
+    ap_timeout: 0s
+
+web_server:
+  port: 80
+  local: true # Embed the web server data to allow it work without internet access
+  ota: false  # Disables OTA through regular web interface
+
+# Captive portal automatically enables web server OTA platform
+# OTA will only be accessible when captive portal is active
+captive_portal:
+
+# Factory reset the device if power is cycled 5 times, with less than 5 seconds each time
+# This clears WiFi credentials and allows the device to be setup again
+# https://esphome.io/components/factory_reset/
+factory_reset:
+  resets_required: 5
+  max_delay: 5s
+
+# Buttons
+button:
+  # https://esphome.io/components/button/restart.html
+  - platform: restart
+    id: restart_button
+    name: Restart Firmware
+    entity_category: diagnostic
+
+# Switches
+switch:
+  # Factory reset switch (clear wifi credentials, etc)
+  - platform: factory_reset
+    name: "Factory Reset"
+
+# Sensors
+sensor:
+  # WiFi signal strength/RSSI in dB
+  - platform: wifi_signal
+    name: "WiFi Signal dB"
+    id: wifi_signal_db
+    entity_category: "diagnostic"
+    update_interval: 5s
+  #  WiFi signal strength in %
+  - platform: copy
+    source_id: wifi_signal_db
+    name: "WiFi Signal Strength"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "%"
+    entity_category: "diagnostic"
+    device_class: ""
+  # ESP32 internal temperature sensor
+  - platform: internal_temperature
+    name: "MCU Internal Temperature"
+    update_interval: 5s
+  # Battery voltage from voltage-divider
+  - platform: adc
+    id: battery_sensor
+    name: "Battery Voltage"
+    icon: "mdi:battery"
+    state_class: "measurement"
+    pin: GPIO0
+    accuracy_decimals: 1
+    update_interval: never # Never update, since we trigger it from the interval block below
+    attenuation: auto
+    filters:
+      - multiply: 1.455
+  # Battery percentage (derived from voltage)
+  - platform: template
+    id: battery_percentage
+    name: "Battery Level"
+    icon: "mdi:battery"
+    device_class: "battery"
+    # Never update, since we trigger it from the interval block below
+    update_interval: never
+    unit_of_measurement: "%"
+    lambda: |-
+      float percentage = ((id(battery_sensor).state - 2.5f) * 70.0f);
+      return min(max(percentage, 0.0f), 100.0f);
+
+  # Example configuration entry SPI
+#  - platform: bmp280_spi
+#    temperature:
+#      name: "Outside Temperature"
+#      oversampling: 16x
+#    pressure:
+#      name: "Outside Pressure"
+#    cs_pin: GPIO4
+#    update_interval: 5s
+  # Example configuration entry I2C
+#  - platform: bmp280_i2c
+#    temperature:
+#      name: "Outside Temperature"
+#      oversampling: 16x
+#    pressure:
+#      name: "Outside Pressure"
+#    address: 0x76
+#    update_interval: 5s
+
+#  - platform: adc
+#    id: moisture_sensor
+#    pin: GPIO6
+#    name: "Moisture Sensor"
+#    update_interval: 5s
+#    attenuation: auto
+
+  - platform: sht4x
+    temperature:
+      name: "SHT40 Temperature"
+    humidity:
+      name: "SHT40 Humidity"
+    address: 0x44
+    update_interval: 5s
+
+# Intervals to read voltage and temperature and control LED
+interval:
+  - interval: 1s
+    then:
+      - if:
+          condition:
+            lambda: 'return (id(ota_sleep_control_state) != 0);'
+          then:
+            - output.turn_on: led_out
+          else:
+            - output.turn_off: led_out
+  - interval: 5s
+    startup_delay: 5s
+    then:
+      - if:
+          condition:
+            lambda: 'return (id(ota_sleep_control_state) == 0);'
+          then:
+            - output.turn_on: led_out
+      - component.update: battery_sensor
+      - component.update: battery_percentage
+      - if:
+          condition:
+            lambda: 'return (id(ota_sleep_control_state) == 0);'
+          then:
+            - output.turn_off: led_out
+
+# Output to drive on board LED
+output:
+  - platform: ledc
+    id: led_out
+    pin: GPIO14
+    channel: 4
+
+#light:
+#  - platform: binary
+#    name: "Onboard LED"
+#    output: led_out
+
+#spi:
+#    clk_pin: GPIO7
+#    miso_pin: GPIO6
+#    mosi_pin: GPIO5
+#    interface: hardware
+
+i2c:
+  scl: GPIO7
+  sda: GPIO6
+  scan: true
+  id: bus_a
+
+#one_wire:
+#  - platform: gpio
+#    pin: GPIO23
+
+uart:
+  tx_pin: GPIO16
+  rx_pin: GPIO17
+  baud_rate: 115200
+
+# Magnetic switch stuff (mouse trap sensor)
+#binary_sensor:
+#  - platform: gpio
+#    pin:
+#      number: GPIO7
+#      allow_other_uses: true
+#    name: "Magnetic Switch"
+#    device_class: window
+#deep_sleep:
+#  wakeup_pin:
+#    number: GPIO7
+#    allow_other_uses: true
+#  wakeup_pin_mode: INVERT_WAKEUP
