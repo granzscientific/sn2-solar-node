@@ -7,14 +7,14 @@ substitutions:
   project_ver_num: "1.0"
   project_ver_let: a
 
-  # ota-sleep-control.yaml module overrides
+  # sleep-control module overrides
   wait_for_initial_setup_duration: 5min
   wait_for_wifi_duration: 10s
   wait_for_api_connection_duration: 30s
   sleep_duration: 15min
 
 packages:
-  granzscientific.sn1-ota: github://granzscientific/esphome-tools/config/sleep-control.yaml
+  granzscientific.sleep-control: github://granzscientific/esphome-tools/config/sleep-control.yaml
 
 esphome:
   project:
