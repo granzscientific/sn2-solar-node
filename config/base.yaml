@@ -11,6 +11,7 @@ substitutions:
   wait_for_initial_setup_duration: 5min
   wait_for_wifi_duration: 10s
   wait_for_api_connection_duration: 30s
+  wait_after_initial_api_connection: 5min
   sleep_duration: 15min
 
 packages:
@@ -55,13 +56,11 @@ api:
 # https://esphome.io/components/ota.html
 ota:
   - platform: esphome
-    # **** No OTA password by default.  You should add one in your config!
     on_error:
       - button.press: restart_button
 
 wifi:
   id: wifi_wificomponent_id # For some reason, if any other id name is used this won't compile
-  # Using max output power on some ESP32C3 chips for the AP seems to cause unexpected reboots (sometimes)
   output_power: 16dB
   # Enable fallback access point (captive portal) in case wifi credentials missing
   ap:
