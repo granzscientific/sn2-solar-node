@@ -240,16 +240,3 @@ uart:
   rx_pin: GPIO17
   baud_rate: 115200
 
-# Magnetic switch stuff (mouse trap sensor)
-#binary_sensor:
-#  - platform: gpio
-#    pin:
-#      number: GPIO7
-#      allow_other_uses: true
-#    name: "Magnetic Switch"
-#    device_class: window
-#deep_sleep:
-#  wakeup_pin:
-#    number: GPIO7
-#    allow_other_uses: true
-#  wakeup_pin_mode: INVERT_WAKEUP
